@@ -19,11 +19,18 @@ type Player = {
   is_active: boolean;
 };
 
-type VsEntryRow = {
+type VsEntryRowRaw = {
   id: string;
   score: number;
   game_day: string; // YYYY-MM-DD
-  players: { name: string } | null;
+  players: { name: string } | { name: string }[] | null;
+};
+
+type VsEntryRow = {
+  id: string;
+  score: number;
+  game_day: string;
+  player_name: string;
 };
 
 function randomCode(len = 8) {
@@ -139,8 +146,35 @@ export default function AppHome() {
       .eq("game_day", day)
       .order("score", { ascending: false });
 
-    if (!error) setVsRows((data ?? []) as VsEntryRow[]);
-  }
+    async function loadVsForDay(allianceId: string, day: string) {
+  const { data, error } = await supabase
+    .from("vs_entries")
+    .select("id, score, game_day, players(name)")
+    .eq("alliance_id", allianceId)
+    .eq("game_day", day)
+    .order("score", { ascending: false });
+
+  if (error) return;
+
+  const raw = (data ?? []) as VsEntryRowRaw[];
+
+  const normalized: VsEntryRow[] = raw.map((r) => {
+    const p = r.players;
+    const name =
+      !p ? "Unknown" :
+      Array.isArray(p) ? (p[0]?.name ?? "Unknown") :
+      (p.name ?? "Unknown");
+
+    return {
+      id: r.id,
+      score: Number(r.score),
+      game_day: r.game_day,
+      player_name: name,
+    };
+  });
+
+  setVsRows(normalized);
+}
 
   async function handleCreateAlliance() {
     setStatusMsg("");
@@ -490,7 +524,7 @@ export default function AppHome() {
             ) : (
               <div style={{ border: "1px solid #eee", borderRadius: 10, overflow: "hidden" }}>
                 {vsRows.map((r) => {
-                  const name = r.players?.name ?? "Unknown";
+                  const name = r.player_name ?? "Unknown";
                   const ok = r.score >= MIN_DAILY;
                   return (
                     <div
