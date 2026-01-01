@@ -1,38 +1,54 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabaseClient";
 
 export default function AuthCallbackPage() {
   const router = useRouter();
+  const params = useSearchParams();
+  const [msg, setMsg] = useState("Finishing sign-in…");
 
   useEffect(() => {
     (async () => {
-      const url = window.location.href;
-      const code = new URL(url).searchParams.get("code");
+      try {
+        // This ensures Supabase stores the session after the magic-link redirect
+        const { data, error } = await supabase.auth.getSession();
 
-      if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(url);
         if (error) {
-          router.replace(`/login?error=${encodeURIComponent(error.message)}`);
+          setMsg(`Sign-in error: ${error.message}`);
           return;
         }
-      }
 
-      const { data } = await supabase.auth.getSession();
-      if (!data.session) {
-        router.replace("/login?error=No%20session%20found");
-        return;
-      }
+        if (data.session) {
+          router.replace("/app");
+          return;
+        }
 
-      router.replace("/app");
+        // If session isn't ready yet, wait briefly and try once more
+        setTimeout(async () => {
+          const again = await supabase.auth.getSession();
+          if (again.data.session) {
+            router.replace("/app");
+          } else {
+            const e =
+              params.get("error_description") ||
+              params.get("error") ||
+              "No session was created.";
+            setMsg(`Sign-in didn’t complete. ${e}`);
+          }
+        }, 800);
+      } catch (e: any) {
+        setMsg(`Unexpected error: ${e?.message ?? String(e)}`);
+      }
     })();
-  }, [router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
-    <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
-      <p>Signing you in…</p>
-    </main>
+    <div style={{ padding: 24 }}>
+      <h1>WarRoom Ops</h1>
+      <p>{msg}</p>
+    </div>
   );
 }
