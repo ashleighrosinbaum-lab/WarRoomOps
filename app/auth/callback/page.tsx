@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabaseClient";
 
-export default function AuthCallbackPage() {
+function CallbackInner() {
   const router = useRouter();
   const params = useSearchParams();
   const [msg, setMsg] = useState("Finishing sign-in…");
@@ -12,7 +12,6 @@ export default function AuthCallbackPage() {
   useEffect(() => {
     (async () => {
       try {
-        // This ensures Supabase stores the session after the magic-link redirect
         const { data, error } = await supabase.auth.getSession();
 
         if (error) {
@@ -25,7 +24,6 @@ export default function AuthCallbackPage() {
           return;
         }
 
-        // If session isn't ready yet, wait briefly and try once more
         setTimeout(async () => {
           const again = await supabase.auth.getSession();
           if (again.data.session) {
@@ -50,5 +48,13 @@ export default function AuthCallbackPage() {
       <h1>WarRoom Ops</h1>
       <p>{msg}</p>
     </div>
+  );
+}
+
+export default function AuthCallbackPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: 24 }}>Finishing sign-in…</div>}>
+      <CallbackInner />
+    </Suspense>
   );
 }
